@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
+import '../services/staff_service.dart';
 import 'announcements_page.dart';
 import 'guests_page.dart';
 import 'service_requests_page.dart' show buildPhotoUrl;
@@ -29,171 +30,272 @@ class ServiceInfo {
   });
 }
 
-const _kServices = [
-  ServiceInfo(
+/// UI-метаданные служб ЖК, индексированы по `specialty` сотрудника.
+/// Живые данные (ФИО, телефон, часы, описание) подтягиваются из API `/staff`.
+class _SpecialtyMeta {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final List<String> categories;
+  final String fallbackDescription;
+  const _SpecialtyMeta({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.categories,
+    required this.fallbackDescription,
+  });
+}
+
+const Map<String, _SpecialtyMeta> _kSpecialtyMeta = {
+  'plumbing': _SpecialtyMeta(
     title: 'Сантехник',
     subtitle: 'Протечки, краны, трубы',
     icon: Icons.plumbing_outlined,
-    staffName: 'Ахмет Бекжанов',
-    phone: '+7 701 234 5678',
-    hours: 'Пн–Пт, 09:00–18:00',
-    available: true,
-    description:
-        'Устранение протечек, ремонт и замена кранов, труб и сантехнических приборов.',
     categories: ['Протечка'],
+    fallbackDescription:
+        'Устранение протечек, ремонт и замена кранов, труб и сантехнических приборов.',
   ),
-  ServiceInfo(
+  'electrical': _SpecialtyMeta(
     title: 'Электрик',
     subtitle: 'Розетки, освещение, автоматы',
     icon: Icons.electrical_services_outlined,
-    staffName: 'Бауыржан Сейткали',
-    phone: '+7 702 345 6789',
-    hours: 'Пн–Пт, 09:00–18:00',
-    available: true,
-    description:
-        'Монтаж и ремонт электропроводки, розеток, выключателей и осветительных приборов.',
     categories: ['Электричество', 'Освещение'],
+    fallbackDescription:
+        'Монтаж и ремонт электропроводки, розеток, выключателей и осветительных приборов.',
   ),
-  ServiceInfo(
+  'cleaning': _SpecialtyMeta(
     title: 'Уборка',
     subtitle: 'Подъезд / двор / после ремонта',
     icon: Icons.cleaning_services_outlined,
-    staffName: 'Гүлнар Ахметова',
-    phone: '+7 703 456 7890',
-    hours: 'Пн–Сб, 08:00–17:00',
-    available: true,
-    description:
-        'Уборка подъездов, придомовой территории, мест общего пользования и послеремонтная уборка.',
     categories: ['Уборка'],
+    fallbackDescription:
+        'Уборка подъездов, придомовой территории и мест общего пользования.',
   ),
-  ServiceInfo(
+  'garbage': _SpecialtyMeta(
     title: 'Вывоз мусора',
     subtitle: 'Мусор, мебель, стройматериалы',
     icon: Icons.local_shipping_outlined,
-    staffName: 'Нурлан Дюсенов',
-    phone: '+7 704 567 8901',
-    hours: 'Пн–Пт, 10:00–17:00',
-    available: false,
-    description:
-        'Вывоз крупногабаритного мусора, старой мебели и строительных отходов.',
     categories: ['Другое'],
+    fallbackDescription:
+        'Вывоз крупногабаритного мусора, старой мебели и строительных отходов.',
   ),
-  ServiceInfo(
-    title: 'Охрана',
-    subtitle: 'Вопросы безопасности',
-    icon: Icons.security_outlined,
-    staffName: 'Дмитрий Карпов',
-    phone: '+7 705 678 9012',
-    hours: 'Круглосуточно',
-    available: true,
-    description:
-        'Контроль доступа на территорию ЖК, видеонаблюдение, реагирование на вызовы.',
-    categories: [],
-  ),
-  ServiceInfo(
+  'intercom': _SpecialtyMeta(
     title: 'Домофон',
     subtitle: 'Ключи, доступ, трубка',
     icon: Icons.door_front_door_outlined,
-    staffName: 'Арман Сейтханов',
-    phone: '+7 706 789 0123',
-    hours: 'Пн–Пт, 09:00–17:00',
-    available: true,
-    description:
-        'Ремонт домофонного оборудования, изготовление дубликатов ключей и карт доступа.',
     categories: ['Домофон'],
+    fallbackDescription:
+        'Ремонт домофонного оборудования, изготовление дубликатов ключей и карт доступа.',
   ),
-  ServiceInfo(
+  'elevator': _SpecialtyMeta(
     title: 'Ремонт лифтов',
     subtitle: 'Техническое обслуживание',
     icon: Icons.elevator_outlined,
-    staffName: 'АО «Лифтсервис»',
-    phone: '+7 800 123 4567',
-    hours: 'Пн–Вс, аварийно 24/7',
-    available: true,
-    description:
-        'Плановое техническое обслуживание и аварийный ремонт лифтового оборудования.',
     categories: ['Лифт'],
+    fallbackDescription:
+        'Плановое техническое обслуживание и аварийный ремонт лифтового оборудования.',
   ),
-];
+};
 
-class ServicesPage extends StatelessWidget {
+/// Карточка «Охрана» статична — отдельной специальности у неё нет.
+const _kSecurityService = ServiceInfo(
+  title: 'Охрана',
+  subtitle: 'Вопросы безопасности',
+  icon: Icons.security_outlined,
+  staffName: 'Служба охраны ЖК',
+  phone: '+7 705 678 9012',
+  hours: 'Круглосуточно',
+  available: true,
+  description:
+      'Контроль доступа на территорию ЖК, видеонаблюдение, реагирование на вызовы.',
+  categories: [],
+);
+
+ServiceInfo _buildServiceInfo(_SpecialtyMeta meta, StaffMember? staff) {
+  if (staff == null) {
+    return ServiceInfo(
+      title: meta.title,
+      subtitle: meta.subtitle,
+      icon: meta.icon,
+      staffName: 'Сотрудник не назначен',
+      phone: '—',
+      hours: '—',
+      available: false,
+      description: meta.fallbackDescription,
+      categories: meta.categories,
+    );
+  }
+  return ServiceInfo(
+    title: meta.title,
+    subtitle: meta.subtitle,
+    icon: meta.icon,
+    staffName: staff.fullName,
+    phone: staff.phone.isEmpty ? '—' : staff.phone,
+    hours: staff.workSchedule.isEmpty ? '—' : staff.workSchedule,
+    available: staff.isAvailable,
+    description: staff.description.isEmpty
+        ? meta.fallbackDescription
+        : staff.description,
+    categories: meta.categories,
+  );
+}
+
+class ServicesPage extends StatefulWidget {
   const ServicesPage({super.key});
+
+  @override
+  State<ServicesPage> createState() => _ServicesPageState();
+}
+
+class _ServicesPageState extends State<ServicesPage> {
+  bool _loading = true;
+  String? _error;
+  List<ServiceInfo> _services = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final staff = await StaffService.instance.getStaff();
+      // Берём первого сотрудника на каждую специальность.
+      final bySpecialty = <String, StaffMember>{};
+      for (final s in staff) {
+        bySpecialty.putIfAbsent(s.specialty, () => s);
+      }
+      final services = <ServiceInfo>[];
+      _kSpecialtyMeta.forEach((specialty, meta) {
+        services.add(_buildServiceInfo(meta, bySpecialty[specialty]));
+      });
+      services.add(_kSecurityService);
+      if (!mounted) return;
+      setState(() {
+        _services = services;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      // Fallback: показываем все специальности как «не назначен», чтобы UI не пустовал.
+      final services = <ServiceInfo>[];
+      _kSpecialtyMeta.forEach((_, meta) {
+        services.add(_buildServiceInfo(meta, null));
+      });
+      services.add(_kSecurityService);
+      setState(() {
+        _services = services;
+        _error = 'Не удалось загрузить сотрудников: $e';
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Сервисы')),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: _TopServiceCard(
-                    title: 'Объявления',
-                    subtitle: 'Новости от УК',
-                    icon: Icons.campaign_outlined,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const AnnouncementsPage()),
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: _TopServiceCard(
+                      title: 'Объявления',
+                      subtitle: 'Новости от УК',
+                      icon: Icons.campaign_outlined,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const AnnouncementsPage()),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _TopServiceCard(
-                    title: 'Гости в ЖК',
-                    subtitle: 'Оформить пропуск',
-                    icon: Icons.badge_outlined,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const GuestsPage()),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _TopServiceCard(
+                      title: 'Гости в ЖК',
+                      subtitle: 'Оформить пропуск',
+                      icon: Icons.badge_outlined,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const GuestsPage()),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Text('Службы ЖК',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 10),
-            ..._kServices.map(
-              (s) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Card(
-                  child: ListTile(
-                    leading: Icon(s.icon),
-                    title: Text(s.title),
-                    subtitle: Text(s.subtitle),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: s.available ? Colors.green : Colors.grey,
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text('Службы ЖК',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 10),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else ...[
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Card(
+                      color: Colors.orange.withValues(alpha: 0.12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          _error!,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ),
+                  ),
+                ..._services.map(
+                  (s) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Card(
+                      child: ListTile(
+                        leading: Icon(s.icon),
+                        title: Text(s.title),
+                        subtitle: Text(s.subtitle),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: s.available ? Colors.green : Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.chevron_right),
+                          ],
+                        ),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ServiceDetailPage(service: s),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.chevron_right),
-                      ],
-                    ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ServiceDetailPage(service: s),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            ],
+          ),
         ),
       ),
     );
