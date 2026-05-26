@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
+import '../utils/error_helper.dart';
 import 'service_requests_page.dart' show specialtyLabel;
+
+const Map<String, String> kStaffSpecialties = {
+  'plumbing': 'Сантехник',
+  'electrical': 'Электрик',
+  'cleaning': 'Уборка',
+  'garbage': 'Вывоз мусора',
+  'intercom': 'Домофон',
+  'elevator': 'Ремонт лифтов',
+};
 
 // ─────────────────────────────────────────────────────
 // Admin: list of all staff members
@@ -83,10 +93,29 @@ class _AdminStaffPageState extends State<AdminStaffPage> {
     }
   }
 
+  Future<void> _openCreateSheet() async {
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const _CreateStaffPage()),
+    );
+    if (created == true && mounted) {
+      _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Сотрудники')),
+      appBar: AppBar(
+        title: const Text('Сотрудники'),
+        actions: [
+          IconButton(
+            tooltip: 'Добавить сотрудника',
+            onPressed: _openCreateSheet,
+            icon: const Icon(Icons.person_add_alt_1),
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -427,5 +456,226 @@ class _StaffRequestsPageState extends State<StaffRequestsPage> {
   static String _fmt(DateTime dt) {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${two(dt.day)}.${two(dt.month)}.${dt.year}  ${two(dt.hour)}:${two(dt.minute)}';
+  }
+}
+
+// ─────────────────────────────────────────────────────
+// Admin: create new staff member
+// ─────────────────────────────────────────────────────
+
+class _CreateStaffPage extends StatefulWidget {
+  const _CreateStaffPage();
+
+  @override
+  State<_CreateStaffPage> createState() => _CreateStaffPageState();
+}
+
+class _CreateStaffPageState extends State<_CreateStaffPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _fullName = TextEditingController();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  final _phone = TextEditingController();
+  final _workSchedule = TextEditingController(text: 'Пн–Пт, 09:00–18:00');
+  final _description = TextEditingController();
+  String _specialty = 'plumbing';
+  bool _obscure = true;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _fullName.dispose();
+    _email.dispose();
+    _password.dispose();
+    _phone.dispose();
+    _workSchedule.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      await ApiClient.instance.post('/admin/staff', data: {
+        'full_name': _fullName.text.trim(),
+        'email': _email.text.trim(),
+        'password': _password.text,
+        'phone': _phone.text.trim(),
+        'specialty': _specialty,
+        'work_schedule': _workSchedule.text.trim(),
+        'description': _description.text.trim(),
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сотрудник добавлен')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(e))),
+      );
+      setState(() => _saving = false);
+    }
+  }
+
+  String? _requiredValidator(String? v, {String label = 'Поле'}) {
+    if (v == null || v.trim().isEmpty) return '$label обязательно';
+    return null;
+  }
+
+  String? _emailValidator(String? v) {
+    final r = _requiredValidator(v, label: 'Email');
+    if (r != null) return r;
+    final email = v!.trim();
+    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+      return 'Некорректный email';
+    }
+    return null;
+  }
+
+  String? _passwordValidator(String? v) {
+    final r = _requiredValidator(v, label: 'Пароль');
+    if (r != null) return r;
+    if (v!.length < 6) return 'Минимум 6 символов';
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Новый сотрудник')),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              TextFormField(
+                controller: _fullName,
+                enabled: !_saving,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'ФИО',
+                  hintText: 'Иван Петров',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+                validator: (v) => _requiredValidator(v, label: 'ФИО'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _specialty,
+                decoration: const InputDecoration(
+                  labelText: 'Специальность',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.work_outline),
+                ),
+                items: kStaffSpecialties.entries
+                    .map((e) => DropdownMenuItem(
+                          value: e.key,
+                          child: Text(e.value),
+                        ))
+                    .toList(),
+                onChanged: _saving
+                    ? null
+                    : (v) => setState(() => _specialty = v ?? 'plumbing'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _email,
+                enabled: !_saving,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Email (для входа)',
+                  hintText: 'plumber@test.com',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.alternate_email),
+                ),
+                validator: _emailValidator,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _password,
+                enabled: !_saving,
+                obscureText: _obscure,
+                textInputAction: TextInputAction.next,
+                decoration: InputDecoration(
+                  labelText: 'Пароль',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscure ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  ),
+                ),
+                validator: _passwordValidator,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _phone,
+                enabled: !_saving,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Телефон',
+                  hintText: '+7 701 234 5678',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+                validator: (v) => _requiredValidator(v, label: 'Телефон'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _workSchedule,
+                enabled: !_saving,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Режим работы',
+                  hintText: 'Пн–Пт, 09:00–18:00',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.schedule_outlined),
+                ),
+                validator: (v) => _requiredValidator(v, label: 'Режим работы'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _description,
+                enabled: !_saving,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Описание (необязательно)',
+                  hintText: 'Краткое описание зоны ответственности',
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _submit,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check),
+                  label: Text(_saving ? 'Сохранение...' : 'Создать сотрудника'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
