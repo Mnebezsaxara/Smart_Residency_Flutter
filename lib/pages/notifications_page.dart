@@ -97,7 +97,10 @@ class _NotificationTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _KindIcon(kind: item.kind),
+            _KindIcon(
+              kind: item.kind,
+              threatType: item.data?['threat_type']?.toString(),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -156,7 +159,8 @@ class _NotificationTile extends StatelessWidget {
 
 class _KindIcon extends StatelessWidget {
   final String kind;
-  const _KindIcon({required this.kind});
+  final String? threatType;
+  const _KindIcon({required this.kind, this.threatType});
 
   @override
   Widget build(BuildContext context) {
@@ -178,6 +182,21 @@ class _KindIcon extends StatelessWidget {
       case 'parking_spot_freed':
         icon = Icons.local_parking;
         color = Colors.blue;
+      case 'sensor_alert':
+        final t = threatType?.toUpperCase() ?? '';
+        if (t == 'FIRE' || t == 'SMOKE') {
+          icon = Icons.local_fire_department;
+          color = Colors.deepOrange;
+        } else if (t == 'WATER_LEAK' || t == 'WATER') {
+          icon = Icons.water_drop;
+          color = Colors.blue;
+        } else {
+          icon = Icons.warning_amber;
+          color = Colors.orange;
+        }
+      case 'sensor_offline':
+        icon = Icons.wifi_off;
+        color = Colors.grey;
       default:
         icon = Icons.notifications;
         color = Colors.blue;
