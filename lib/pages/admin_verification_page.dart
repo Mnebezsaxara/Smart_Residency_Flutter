@@ -135,9 +135,13 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
 
   /// На Android-эмуляторе localhost — это сам эмулятор, а не хост-машина.
   /// Заменяем на 10.0.2.2, чтобы достучаться до сервера.
-  String _fixUrl(String url) => url
-      .replaceFirst('http://localhost:', 'http://10.0.2.2:')
-      .replaceFirst('http://127.0.0.1:', 'http://10.0.2.2:');
+  String _fixUrl(String url) {
+    final host = ApiClient.baseHost;
+    return url
+        .replaceFirst(RegExp(r'http://localhost:\d+'), host)
+        .replaceFirst(RegExp(r'http://127\.0\.0\.1:\d+'), host)
+        .replaceFirst(RegExp(r'http://10\.0\.2\.2:\d+'), host);
+  }
 
   /// Собираем список URL-кандидатов, по которым может лежать файл.
   /// Бэкенд может отдать как полный URL, так и относительный путь, плюс
@@ -166,7 +170,9 @@ class _AdminVerificationPageState extends State<AdminVerificationPage> {
     final fp = doc.filePath;
     if (fp.isNotEmpty) {
       final clean = fp.startsWith('/') ? fp.substring(1) : fp;
-      urls.add('$host/uploads/$clean');
+      // Убираем ведущий 'uploads/', чтобы не получить /uploads/uploads/...
+      final cleanNoPrefix = clean.startsWith('uploads/') ? clean.substring('uploads/'.length) : clean;
+      urls.add('$host/uploads/$cleanNoPrefix');
       urls.add('$host/$clean');
     }
 
@@ -645,34 +651,136 @@ class _PermitsTabState extends State<_PermitsTab> {
     }
   }
 
+  Future<void> _openPermitDoc(ParkingPermit permit) async {
+    final rawUrl = permit.documentUrl;
+    if (rawUrl == null) return;
+    final host = ApiClient.baseHost;
+    final url = rawUrl
+        .replaceFirst(RegExp(r'http://localhost:\d+'), host)
+        .replaceFirst(RegExp(r'http://127\.0\.0\.1:\d+'), host)
+        .replaceFirst(RegExp(r'http://10\.0\.2\.2:\d+'), host);
+    final fileName = url.split('/').last.isNotEmpty ? url.split('/').last : 'document';
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Загрузка…'), duration: Duration(seconds: 60)),
+    );
+
+    try {
+      final res = await ApiClient.instance.downloadBytes(url);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      if (res.statusCode != 200 || res.data == null || res.data!.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось загрузить файл (HTTP ${res.statusCode})')),
+        );
+        return;
+      }
+
+      final bytes = Uint8List.fromList(res.data!);
+      final contentType = res.headers.value('content-type') ?? '';
+      final n = fileName.toLowerCase();
+      final isImage = n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.png') ||
+          n.endsWith('.webp') || n.endsWith('.gif') || contentType.startsWith('image/');
+      final isPdf = n.endsWith('.pdf') || contentType.contains('pdf');
+
+      if (isImage) {
+        await Navigator.push(context, MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: Text(fileName, maxLines: 1, overflow: TextOverflow.ellipsis)),
+            body: InteractiveViewer(
+              minScale: 0.5, maxScale: 5,
+              child: Center(child: Image.memory(bytes)),
+            ),
+          ),
+        ));
+      } else if (isPdf) {
+        await Navigator.push(context, MaterialPageRoute(
+          builder: (_) => _PdfViewerPage(title: fileName, bytes: bytes),
+        ));
+      } else {
+        final dir = await getTemporaryDirectory();
+        final clean = fileName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+        final file = File('${dir.path}/$clean');
+        await file.writeAsBytes(bytes, flush: true);
+        if (!mounted) return;
+        final messenger = ScaffoldMessenger.of(context);
+        final result = await OpenFile.open(file.path);
+        if (result.type != ResultType.done) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Нет приложения для этого формата: ${result.message}')),
+          );
+        }
+      }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка сети: ${e.message}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+    }
+  }
+
   Future<void> _review(ParkingPermit permit, String status) async {
     String? comment;
     if (status == 'rejected') {
       final ctrl = TextEditingController();
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Причина отклонения'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: TextField(
-                controller: ctrl,
-                decoration: const InputDecoration(
-                  hintText: 'Необязательно',
-                  border: OutlineInputBorder(),
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: const Text('Причина отклонения'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (permit.documentUrl != null) ...[
+                      OutlinedButton.icon(
+                        onPressed: () => _openPermitDoc(permit),
+                        icon: const Icon(Icons.insert_drive_file_outlined, size: 16),
+                        label: const Text('Просмотреть документ'),
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    TextField(
+                      controller: ctrl,
+                      onChanged: (_) => setDialogState(() {}),
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        hintText: 'Укажите причину',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+              FilledButton(
+                onPressed: ctrl.text.trim().isEmpty
+                    ? null
+                    : () => Navigator.pop(ctx, true),
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('Отклонить'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Отклонить')),
-          ],
         ),
       );
       if (confirmed != true) return;
-      comment = ctrl.text.trim().isEmpty ? null : ctrl.text.trim();
+      comment = ctrl.text.trim();
     }
     try {
       await ParkingService.instance.adminReviewPermit(permit.id, status, adminComment: comment);
@@ -722,6 +830,7 @@ class _PermitsTabState extends State<_PermitsTab> {
                                 permit: p,
                                 onApprove: p.isPending ? () => _review(p, 'approved') : null,
                                 onReject:  p.isPending ? () => _review(p, 'rejected') : null,
+                                onOpenDocument: p.documentUrl != null ? () => _openPermitDoc(p) : null,
                               );
                             },
                           ),
@@ -736,8 +845,9 @@ class _PermitCard extends StatelessWidget {
   final ParkingPermit permit;
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
+  final VoidCallback? onOpenDocument;
 
-  const _PermitCard({required this.permit, this.onApprove, this.onReject});
+  const _PermitCard({required this.permit, this.onApprove, this.onReject, this.onOpenDocument});
 
   @override
   Widget build(BuildContext context) {
@@ -780,12 +890,16 @@ class _PermitCard extends StatelessWidget {
               ],
             ),
             if (p.documentUrl != null) ...[
-              const SizedBox(height: 4),
-              const Row(children: [
-                Icon(Icons.attach_file, size: 14, color: Colors.black45),
-                SizedBox(width: 4),
-                Text('Документ прикреплён', style: TextStyle(fontSize: 12, color: Colors.black45)),
-              ]),
+              const SizedBox(height: 6),
+              OutlinedButton.icon(
+                onPressed: onOpenDocument,
+                icon: const Icon(Icons.insert_drive_file_outlined, size: 16),
+                label: const Text('Открыть документ'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                ),
+              ),
             ],
             if (p.adminComment != null && p.adminComment!.isNotEmpty) ...[
               const SizedBox(height: 4),
