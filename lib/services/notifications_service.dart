@@ -657,7 +657,9 @@ class NotificationsService {
       SensorService.instance.refreshFromPush(data);
     } else if (kind == 'unknown_vehicle') {
       BarrierService.instance.refreshFromPush(data);
-    } else if (kind == 'parking_alert' || kind == 'parking_spot_freed') {
+    } else if (kind == 'parking_alert' ||
+        kind == 'parking_spot_freed' ||
+        kind == 'parking_no_permit') {
       ParkingService.instance.refreshFromPush(data);
     }
     // guest_arrived: only a local notification banner, no stream update needed
@@ -683,6 +685,13 @@ class NotificationsService {
       case 'parking_spot_freed':
         title = data['title'] ?? 'Место освобождено';
         body = data['body'] ?? 'Парковочное место №${data['spot_number'] ?? ''} свободно';
+      case 'parking_no_permit':
+        title = data['title'] ?? 'Нет пропуска на паркинг';
+        final plate = data['plate_number'] ?? '';
+        body = data['body'] ??
+            (plate.isNotEmpty
+                ? 'Автомобиль $plate не имеет пропуска'
+                : 'Автомобиль без пропуска на гостевом месте');
       default:
         debugPrint('[FCM] _emitInApp: unknown kind=$kind, skipping');
         return;
@@ -710,6 +719,9 @@ class NotificationsService {
     if (kind == 'parking_spot_freed') {
       return {'kind': 'parking_spot_freed', 'spot_id': extra};
     }
+    if (kind == 'parking_no_permit') {
+      return {'kind': 'parking_no_permit', 'event_id': extra};
+    }
     return {'kind': 'sensor_alert', 'event_id': payload};
   }
 
@@ -722,7 +734,8 @@ class NotificationsService {
     return kind == 'unknown_vehicle' ||
         kind == 'guest_arrived' ||
         kind == 'parking_alert' ||
-        kind == 'parking_spot_freed';
+        kind == 'parking_spot_freed' ||
+        kind == 'parking_no_permit';
   }
 
   String _platformName() {
