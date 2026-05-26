@@ -122,6 +122,7 @@ class _GuestsPageState extends State<GuestsPage> {
     if (_from == null || _to == null) { _snack('Выберите время "с" и "по"'); return; }
     if (!_to!.isAfter(_from!)) { _snack('Время "по" должно быть позже времени "с"'); return; }
     if (_byCar && _car.text.trim().isEmpty) { _snack('Введите номер авто или выключите режим "Гость на авто"'); return; }
+    if (_byCar && _selectedGuestSpotId == null) { _snack('Выберите гостевое место для авто'); return; }
 
     setState(() => _loading = true);
 
@@ -133,8 +134,7 @@ class _GuestsPageState extends State<GuestsPage> {
         'access_type': _byCar ? 'car' : 'walk',
         'valid_from': _from!.toUtc().toIso8601String(),
         'valid_until': _to!.toUtc().toIso8601String(),
-        if (_byCar && _selectedGuestSpotId != null)
-          'parking_spot_id': _selectedGuestSpotId,
+        if (_byCar) 'parking_spot_id': _selectedGuestSpotId,
       });
 
       final code = res.data['access_code'] as String;
@@ -191,8 +191,17 @@ class _GuestsPageState extends State<GuestsPage> {
     }
   }
 
-  Set<String> get _myActivePassSpotIds => _passes
-      .where((p) => (p.status == 'active' || p.status == 'arrived') && p.parkingSpotId != null)
+  /// Места, к которым у меня есть пропуск, но гость ещё НЕ приехал (status='active').
+  /// Только их стоит считать «незаконно занятыми», если место красное.
+  Set<String> get _pendingPassSpotIds => _passes
+      .where((p) => p.status == 'active' && p.parkingSpotId != null)
+      .map((p) => p.parkingSpotId!)
+      .toSet();
+
+  /// Места, где мой гость уже на территории. На них тапать «Сообщить» НЕ нужно —
+  /// машина там законно.
+  Set<String> get _arrivedPassSpotIds => _passes
+      .where((p) => p.status == 'arrived' && p.parkingSpotId != null)
       .map((p) => p.parkingSpotId!)
       .toSet();
 
@@ -267,8 +276,8 @@ class _GuestsPageState extends State<GuestsPage> {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'Гостевое место (необязательно)',
-                          style: TextStyle(fontSize: 13),
+                          'Гостевое место (обязательно)',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 8),
                         if (_guestSpots.isEmpty)
@@ -294,22 +303,31 @@ class _GuestsPageState extends State<GuestsPage> {
                                   : isReserved
                                       ? 'Бронь'
                                       : 'Занято';
-                              final isMyOccupied = !isFree &&
+                              // Незаконно занято: место красное, у меня есть пропуск на него,
+                              // но гость ещё не приехал — значит кто-то посторонний.
+                              final isUnlawfullyOccupied = !isFree &&
                                   !isReserved &&
-                                  _myActivePassSpotIds.contains(spot.id);
+                                  _pendingPassSpotIds.contains(spot.id);
+                              // Мой гость законно приехал — никаких диалогов «Сообщить».
+                              final isMyGuestArrived = !isFree &&
+                                  !isReserved &&
+                                  _arrivedPassSpotIds.contains(spot.id);
                               return GestureDetector(
                                 onTap: _loading
                                     ? null
-                                    : isMyOccupied
+                                    : isUnlawfullyOccupied
                                         ? () => _reportGuestSpotToAdmin(spot)
-                                        : !isFree
+                                        : isMyGuestArrived
                                             ? () => _snack(
-                                                isReserved
-                                                    ? 'Место ${spot.spotNumber} забронировано. Выберите другое место.'
-                                                    : 'Место ${spot.spotNumber} занято. Выберите другое место.')
-                                            : () => setState(() =>
-                                                _selectedGuestSpotId =
-                                                    isSelected ? null : spot.id),
+                                                'Место ${spot.spotNumber} занято вашим гостем (на территории).')
+                                            : !isFree
+                                                ? () => _snack(
+                                                    isReserved
+                                                        ? 'Место ${spot.spotNumber} забронировано. Выберите другое место.'
+                                                        : 'Место ${spot.spotNumber} занято. Выберите другое место.')
+                                                : () => setState(() =>
+                                                    _selectedGuestSpotId =
+                                                        isSelected ? null : spot.id),
                                 child: Container(
                                   width: 64,
                                   height: 56,
@@ -370,10 +388,14 @@ class _GuestsPageState extends State<GuestsPage> {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton(
-                          onPressed: _loading ? null : _createPass,
+                          onPressed: (_loading || (_byCar && _selectedGuestSpotId == null))
+                              ? null
+                              : _createPass,
                           child: _loading
                               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : const Text('Создать пропуск'),
+                              : Text(_byCar && _selectedGuestSpotId == null
+                                  ? 'Выберите место для авто'
+                                  : 'Создать пропуск'),
                         ),
                       ),
                     ],
