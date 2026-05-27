@@ -17,6 +17,7 @@ import 'admin_verification_page.dart';
 import 'announcements_page.dart';
 import 'barrier_page.dart';
 import 'guests_page.dart';
+import 'news_page.dart';
 import 'notifications_page.dart';
 import 'parking_page.dart';
 import 'profile_page.dart';
@@ -147,6 +148,7 @@ class _DashboardPageState extends State<DashboardPage>
   static int _pageCountForRole(String role) {
     if (role == 'staff') return 2;
     if (role == 'guard') return 4;
+    if (role == 'admin') return 6;
     return 5;
   }
 
@@ -165,7 +167,7 @@ class _DashboardPageState extends State<DashboardPage>
         const ProfilePage(),
       ];
     }
-    return [
+    final pages = [
       _HomeOverviewTab(
         role: _role,
         userId: _userId,
@@ -179,8 +181,18 @@ class _DashboardPageState extends State<DashboardPage>
       const ServiceRequestsPage(),
       const ServicesPage(),
       const ParkingPage(),
-      const ProfilePage(),
     ];
+
+    if (_role == 'admin') {
+      pages.addAll([
+        const NewsPage(),
+        const ProfilePage(),
+      ]);
+    } else {
+      pages.add(const ProfilePage());
+    }
+
+    return pages;
   }
 
   List<BottomNavigationBarItem> get _items {
@@ -216,7 +228,7 @@ class _DashboardPageState extends State<DashboardPage>
         ),
       ];
     }
-    return const [
+    final items = const [
       BottomNavigationBarItem(
         icon: Icon(Icons.home_outlined),
         label: 'Главная',
@@ -233,7 +245,25 @@ class _DashboardPageState extends State<DashboardPage>
         icon: Icon(Icons.local_parking),
         label: 'Паркинг',
       ),
-      BottomNavigationBarItem(
+    ];
+
+    if (_role == 'admin') {
+      return [
+        ...items,
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.newspaper_outlined),
+          label: 'Новости',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          label: 'Профиль',
+        ),
+      ];
+    }
+
+    return [
+      ...items,
+      const BottomNavigationBarItem(
         icon: Icon(Icons.person_outline),
         label: 'Профиль',
       ),
