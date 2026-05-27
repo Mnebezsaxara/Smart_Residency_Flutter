@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import 'change_password_on_first_login_page.dart';
+import 'forgot_password_page.dart';
 import 'register_flow_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -146,9 +147,25 @@ class _LoginPageState extends State<LoginPage> {
                       child: Text(_loading ? 'Вход...' : 'Войти'),
                     ),
                     const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          onPressed: _loading ? null : _openRegister,
+                          child: const Text('Нет аккаунта? Зарегистрироваться'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     TextButton(
-                      onPressed: _loading ? null : _openRegister,
-                      child: const Text('Нет аккаунта? Зарегистрироваться'),
+                      onPressed: _loading ? null : () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ForgotPasswordPage(),
+                          ),
+                        );
+                      },
+                      child: const Text('Проблемы с авторизацией?'),
                     ),
                   ],
                 ),
