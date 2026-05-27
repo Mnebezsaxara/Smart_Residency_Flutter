@@ -829,28 +829,35 @@ class _AssignStaffSheetState extends State<_AssignStaffSheet> {
               child: Text('Нет доступных сотрудников'),
             )
           else
-            ...(_staff.map((s) {
-              final busy = _assigning == s.id;
-              return ListTile(
-                leading: CircleAvatar(
-                  child: Text(
-                    s.fullName.isNotEmpty ? s.fullName[0] : '?',
-                  ),
-                ),
-                title: Text(s.fullName),
-                subtitle: Text(
-                  '${specialtyLabel(s.specialty)} · в работе: ${s.inProgressCount}',
-                ),
-                trailing: busy
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.chevron_right),
-                onTap: _assigning != null ? null : () => _assign(s.id),
-              );
-            })),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _staff.length,
+                itemBuilder: (context, index) {
+                  final s = _staff[index];
+                  final busy = _assigning == s.id;
+                  return ListTile(
+                    leading: CircleAvatar(
+                      child: Text(
+                        s.fullName.isNotEmpty ? s.fullName[0] : '?',
+                      ),
+                    ),
+                    title: Text(s.fullName),
+                    subtitle: Text(
+                      '${specialtyLabel(s.specialty)} · в работе: ${s.inProgressCount}',
+                    ),
+                    trailing: busy
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chevron_right),
+                    onTap: _assigning != null ? null : () => _assign(s.id),
+                  );
+                },
+              ),
+            ),
           const SizedBox(height: 8),
         ],
       ),
