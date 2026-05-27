@@ -157,6 +157,8 @@ class _ServicesPageState extends State<ServicesPage> {
     _load();
   }
 
+  late Map<String, List<StaffMember>> _staffBySpecialty = {};
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -164,14 +166,19 @@ class _ServicesPageState extends State<ServicesPage> {
     });
     try {
       final staff = await StaffService.instance.getStaff();
-      // Берём первого сотрудника на каждую специальность.
-      final bySpecialty = <String, StaffMember>{};
+      // Группируем всех сотрудников по специальности.
+      final bySpecialty = <String, List<StaffMember>>{};
       for (final s in staff) {
-        bySpecialty.putIfAbsent(s.specialty, () => s);
+        bySpecialty.putIfAbsent(s.specialty, () => []).add(s);
       }
+      _staffBySpecialty = bySpecialty;
+
       final services = <ServiceInfo>[];
       _kSpecialtyMeta.forEach((specialty, meta) {
-        services.add(_buildServiceInfo(meta, bySpecialty[specialty]));
+        // Берём первого сотрудника для отображения в карточке
+        final staffList = bySpecialty[specialty];
+        final firstStaff = staffList?.isNotEmpty == true ? staffList!.first : null;
+        services.add(_buildServiceInfo(meta, firstStaff));
       });
       services.add(_kSecurityService);
       if (!mounted) return;
@@ -251,12 +258,32 @@ class _ServicesPageState extends State<ServicesPage> {
                             const Icon(Icons.chevron_right),
                           ],
                         ),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ServiceDetailPage(service: s),
-                          ),
-                        ),
+                        onTap: () {
+                          final specialty = _kSpecialtyMeta.entries
+                              .firstWhere(
+                                (e) => e.value.title == s.title,
+                                orElse: () =>
+                                    const MapEntry('', _SpecialtyMeta(
+                                      title: '',
+                                      subtitle: '',
+                                      icon: Icons.help,
+                                      categories: [],
+                                      fallbackDescription: '',
+                                    )),
+                              )
+                              .key;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ServiceDetailPage(
+                                service: s,
+                                staffList: specialty.isNotEmpty
+                                    ? _staffBySpecialty[specialty]
+                                    : null,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -276,8 +303,13 @@ class _ServicesPageState extends State<ServicesPage> {
 
 class ServiceDetailPage extends StatefulWidget {
   final ServiceInfo service;
+  final List<StaffMember>? staffList;
 
-  const ServiceDetailPage({super.key, required this.service});
+  const ServiceDetailPage({
+    super.key,
+    required this.service,
+    this.staffList,
+  });
 
   @override
   State<ServiceDetailPage> createState() => _ServiceDetailPageState();
@@ -291,11 +323,20 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   bool _loading = true;
   String? _error;
   List<_SvcRequest> _requests = [];
+  String? _selectedStaffId;
 
   @override
   void initState() {
     super.initState();
+    _initializeSelectedStaff();
     _load();
+  }
+
+  void _initializeSelectedStaff() {
+    final staffList = widget.staffList;
+    if (staffList != null && staffList.isNotEmpty) {
+      _selectedStaffId = staffList.first.id;
+    }
   }
 
   Future<void> _load() async {
@@ -316,10 +357,19 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
           .map((r) => _SvcRequest.fromMap(Map<String, dynamic>.from(r as Map)))
           .toList();
 
+      var filtered = all;
+
+      // Filter by category if available
       final cats = widget.service.categories;
-      final filtered = cats.isEmpty
-          ? all
-          : all.where((r) => cats.contains(r.category)).toList();
+      if (cats.isNotEmpty) {
+        filtered = filtered.where((r) => cats.contains(r.category)).toList();
+      }
+
+      // Filter by selected staff member if multiple staff members for this specialty
+      if (widget.staffList != null && widget.staffList!.length > 1 && _selectedStaffId != null) {
+        filtered = filtered.where((r) => r.assignedTo == _selectedStaffId).toList();
+      }
+
       filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
       if (!mounted) return;
@@ -355,6 +405,17 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   @override
   Widget build(BuildContext context) {
     final s = widget.service;
+    final staffList = widget.staffList ?? [];
+    final hasMultipleStaff = staffList.length > 1;
+
+    StaffMember? selectedStaff;
+    if (hasMultipleStaff && _selectedStaffId != null) {
+      selectedStaff = staffList.firstWhere(
+        (staff) => staff.id == _selectedStaffId,
+        orElse: () => staffList.first,
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: Text(s.title)),
       body: SafeArea(
@@ -363,6 +424,31 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // ── Выбор сотрудника (если их несколько) ─────────────────────
+              if (hasMultipleStaff) ...[
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: staffList.map((staff) {
+                      final isSelected = _selectedStaffId == staff.id;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          selected: isSelected,
+                          label: Text(staff.fullName),
+                          onSelected: (_) {
+                            setState(() {
+                              _selectedStaffId = staff.id;
+                            });
+                            _load();
+                          },
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               // ── Карточка сотрудника ─────────────────────────────────────
               Card(
                 child: Padding(
@@ -390,10 +476,14 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(s.staffName,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium),
+                                Text(
+                                  hasMultipleStaff && selectedStaff != null
+                                      ? selectedStaff.fullName
+                                      : s.staffName,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium,
+                                ),
                                 const SizedBox(height: 2),
                                 Row(
                                   children: [
@@ -402,19 +492,25 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                                       height: 8,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        color: s.available
+                                        color: (selectedStaff?.isAvailable ??
+                                                s.available)
                                             ? Colors.green
                                             : Colors.grey,
                                       ),
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      s.available ? 'Доступен' : 'Недоступен',
+                                      (selectedStaff?.isAvailable ??
+                                              s.available)
+                                          ? 'Доступен'
+                                          : 'Недоступен',
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall
                                           ?.copyWith(
-                                            color: s.available
+                                            color: (selectedStaff
+                                                        ?.isAvailable ??
+                                                    s.available)
                                                 ? Colors.green
                                                 : Colors.grey,
                                           ),
@@ -428,14 +524,25 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                       ),
                       const SizedBox(height: 14),
                       _InfoRow(
-                          icon: Icons.phone_outlined, text: s.phone),
+                        icon: Icons.phone_outlined,
+                        text: selectedStaff?.phone.isEmpty ?? true
+                            ? '—'
+                            : selectedStaff!.phone,
+                      ),
                       const SizedBox(height: 8),
                       _InfoRow(
-                          icon: Icons.access_time_outlined,
-                          text: s.hours),
+                        icon: Icons.access_time_outlined,
+                        text: selectedStaff?.workSchedule.isEmpty ?? true
+                            ? '—'
+                            : selectedStaff!.workSchedule,
+                      ),
                       const SizedBox(height: 8),
                       _InfoRow(
-                          icon: Icons.info_outline, text: s.description),
+                        icon: Icons.info_outline,
+                        text: selectedStaff?.description.isEmpty ?? true
+                            ? s.description
+                            : selectedStaff!.description,
+                      ),
                     ],
                   ),
                 ),
@@ -513,6 +620,7 @@ class _SvcRequest {
   final String status;
   final DateTime createdAt;
   final List<String> photos;
+  final String? assignedTo;
 
   const _SvcRequest({
     required this.id,
@@ -521,6 +629,7 @@ class _SvcRequest {
     required this.status,
     required this.createdAt,
     required this.photos,
+    this.assignedTo,
   });
 
   factory _SvcRequest.fromMap(Map<String, dynamic> m) {
@@ -539,6 +648,7 @@ class _SvcRequest {
       createdAt: DateTime.tryParse((m['created_at'] ?? '').toString()) ??
           DateTime.now(),
       photos: photos,
+      assignedTo: m['assigned_to'] as String?,
     );
   }
 }
