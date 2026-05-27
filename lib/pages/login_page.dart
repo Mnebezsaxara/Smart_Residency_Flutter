@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import 'change_password_on_first_login_page.dart';
 import 'register_flow_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -33,7 +34,7 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => _loading = true);
 
-    final error = await _authService.login(
+    final result = await _authService.login(
       email: _emailController.text,
       password: _passwordController.text,
     );
@@ -41,14 +42,30 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted) return;
     setState(() => _loading = false);
 
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error)),
-      );
-      return;
-    }
+    result.when(
+      onSuccess: () => Navigator.of(context).pop(),
+      onError: (error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error)),
+        );
+      },
+      onPasswordChangeRequired: (temporaryToken, email, role) async {
+        // Показываем экран смены пароля
+        final changed = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => ChangePasswordOnFirstLoginPage(
+              temporaryToken: temporaryToken,
+              email: email,
+              role: role,
+            ),
+          ),
+        );
 
-    Navigator.of(context).pop();
+        if (changed == true && mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+    );
   }
 
   void _openRegister() {

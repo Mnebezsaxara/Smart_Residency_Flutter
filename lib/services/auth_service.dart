@@ -17,6 +17,66 @@ class AppUser {
   const AppUser({required this.id, required this.email});
 }
 
+sealed class LoginResult {
+  const LoginResult();
+
+  factory LoginResult.success() => const _SuccessLoginResult();
+
+  factory LoginResult.error(String message) => _ErrorLoginResult(message);
+
+  factory LoginResult.passwordChangeRequired({
+    required String temporaryToken,
+    required String email,
+    required String role,
+  }) =>
+      _PasswordChangeRequiredLoginResult(
+        temporaryToken: temporaryToken,
+        email: email,
+        role: role,
+      );
+
+  T when<T>({
+    required T Function() onSuccess,
+    required T Function(String error) onError,
+    required T Function(
+      String temporaryToken,
+      String email,
+      String role,
+    ) onPasswordChangeRequired,
+  }) =>
+      switch (this) {
+        _SuccessLoginResult() => onSuccess(),
+        _ErrorLoginResult(message: final msg) => onError(msg),
+        _PasswordChangeRequiredLoginResult(
+          temporaryToken: final token,
+          email: final email,
+          role: final role,
+        ) =>
+          onPasswordChangeRequired(token, email, role),
+      };
+}
+
+class _SuccessLoginResult extends LoginResult {
+  const _SuccessLoginResult();
+}
+
+class _ErrorLoginResult extends LoginResult {
+  final String message;
+  const _ErrorLoginResult(this.message);
+}
+
+class _PasswordChangeRequiredLoginResult extends LoginResult {
+  final String temporaryToken;
+  final String email;
+  final String role;
+
+  const _PasswordChangeRequiredLoginResult({
+    required this.temporaryToken,
+    required this.email,
+    required this.role,
+  });
+}
+
 class ResidentAddress {
   final int entrance;
   final int floor;
@@ -142,7 +202,7 @@ class AuthService {
     }
   }
 
-  Future<String?> login({
+  Future<LoginResult> login({
     required String email,
     required String password,
   }) async {
@@ -152,6 +212,19 @@ class AuthService {
         'password': password.trim(),
       });
 
+      final status = res.data['status'] as String?;
+
+      // Проверяем требуется ли смена пароля при первом входе
+      if (status == 'password_change_required') {
+        final token = res.data['token'] as String;
+        final role = res.data['role'] as String? ?? 'resident';
+        return LoginResult.passwordChangeRequired(
+          temporaryToken: token,
+          email: email.trim(),
+          role: role,
+        );
+      }
+
       final token = res.data['token'] as String;
       final userId = res.data['user_id'] as String;
       final role = res.data['role'] as String? ?? 'resident';
@@ -160,14 +233,16 @@ class AuthService {
       _currentUser = AppUser(id: userId, email: email.trim());
       _controller.add(_currentUser);
       unawaited(NotificationsService.instance.syncTokenWithBackend());
-      return null;
+      return LoginResult.success();
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
-        return 'Неверный email или пароль';
+        return LoginResult.error('Неверный email или пароль');
       }
-      return e.response?.data?['error']?.toString() ?? 'Ошибка входа';
+      return LoginResult.error(
+        e.response?.data?['error']?.toString() ?? 'Ошибка входа',
+      );
     } catch (e) {
-      return 'Неизвестная ошибка: $e';
+      return LoginResult.error('Неизвестная ошибка: $e');
     }
   }
 
