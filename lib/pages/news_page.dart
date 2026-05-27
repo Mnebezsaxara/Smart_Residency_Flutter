@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 
 import '../services/api_client.dart';
 
@@ -8,7 +7,7 @@ class News {
   final String title;
   final String body;
   final String author;
-  final String? entrance;
+  final int? entrance;
   final DateTime createdAt;
   final bool isPinned;
 
@@ -28,7 +27,7 @@ class News {
       title: (map['title'] ?? '').toString(),
       body: (map['body'] ?? '').toString(),
       author: (map['author'] ?? '').toString(),
-      entrance: map['entrance']?.toString(),
+      entrance: map['entrance'] as int?,
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()) ??
           DateTime.now(),
       isPinned: map['is_pinned'] == true,
@@ -330,7 +329,7 @@ class _NewsCard extends StatelessWidget {
                   Icon(Icons.apartment, size: 14, color: Colors.grey),
                   const SizedBox(width: 4),
                   Text(
-                    news.entrance!,
+                    'Подъезд ${news.entrance}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -389,7 +388,7 @@ class _CreateNewsSheetState extends State<_CreateNewsSheet> {
         data: {
           'title': _titleController.text.trim(),
           'body': _bodyController.text.trim(),
-          'entrance_id': _forAllEntrances ? null : '',
+          'entrance': _forAllEntrances ? null : 1,
           'is_pinned': _isPinned,
         },
       );

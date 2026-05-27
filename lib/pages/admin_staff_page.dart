@@ -474,19 +474,16 @@ class _CreateStaffPageState extends State<_CreateStaffPage> {
   final _formKey = GlobalKey<FormState>();
   final _fullName = TextEditingController();
   final _email = TextEditingController();
-  final _password = TextEditingController();
   final _phone = TextEditingController();
   final _workSchedule = TextEditingController(text: 'Пн–Пт, 09:00–18:00');
   final _description = TextEditingController();
   String _specialty = 'plumbing';
-  bool _obscure = true;
   bool _saving = false;
 
   @override
   void dispose() {
     _fullName.dispose();
     _email.dispose();
-    _password.dispose();
     _phone.dispose();
     _workSchedule.dispose();
     _description.dispose();
@@ -497,19 +494,60 @@ class _CreateStaffPageState extends State<_CreateStaffPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await ApiClient.instance.post('/admin/staff', data: {
+      final res = await ApiClient.instance.post('/admin/staff', data: {
         'full_name': _fullName.text.trim(),
         'email': _email.text.trim(),
-        'password': _password.text,
         'phone': _phone.text.trim(),
         'specialty': _specialty,
         'work_schedule': _workSchedule.text.trim(),
         'description': _description.text.trim(),
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Сотрудник добавлен')),
+
+      final tempPassword = res.data?['temporary_password']?.toString() ?? '';
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Сотрудник добавлен'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Временный пароль:'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Text(
+                  tempPassword,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Передайте этот пароль сотруднику. '
+                'При первом входе ему нужно будет сменить пароль.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Закрыть'),
+            ),
+          ],
+        ),
       );
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -532,13 +570,6 @@ class _CreateStaffPageState extends State<_CreateStaffPage> {
     if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
       return 'Некорректный email';
     }
-    return null;
-  }
-
-  String? _passwordValidator(String? v) {
-    final r = _requiredValidator(v, label: 'Пароль');
-    if (r != null) return r;
-    if (v!.length < 6) return 'Минимум 6 символов';
     return null;
   }
 
@@ -595,25 +626,6 @@ class _CreateStaffPageState extends State<_CreateStaffPage> {
                   prefixIcon: Icon(Icons.alternate_email),
                 ),
                 validator: _emailValidator,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _password,
-                enabled: !_saving,
-                obscureText: _obscure,
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: 'Пароль',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscure ? Icons.visibility_off : Icons.visibility,
-                    ),
-                    onPressed: () => setState(() => _obscure = !_obscure),
-                  ),
-                ),
-                validator: _passwordValidator,
               ),
               const SizedBox(height: 12),
               TextFormField(
