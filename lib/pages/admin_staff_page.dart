@@ -516,18 +516,20 @@ class _CreateStaffPageState extends State<_CreateStaffPage> {
               const Text('Временный пароль:'),
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: Colors.grey.shade900,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: Colors.grey.shade700),
                 ),
                 child: Text(
                   tempPassword,
                   style: const TextStyle(
                     fontFamily: 'monospace',
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.2,
                   ),
                 ),
               ),
