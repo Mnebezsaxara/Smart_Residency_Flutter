@@ -109,7 +109,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         ),
         const SizedBox(height: 12),
         Text(
-          'Введите адрес электронной почты, связанный с вашей учетной записью. Код восстановления придет в виде push-уведомления.',
+          'Введите адрес электронной почты, связанный с вашей учетной записью. Код восстановления придет на эту почту.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -245,7 +245,7 @@ class _ResetPasswordFormState extends State<_ResetPasswordForm> {
         ),
         const SizedBox(height: 12),
         Text(
-          'Мы отправили 6-значный код на ваше устройство. Проверьте push-уведомления.',
+          'Мы отправили 6-значный код на вашу почту. Проверьте входящие письма (и спам).',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
