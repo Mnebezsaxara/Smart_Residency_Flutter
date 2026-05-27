@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 
 import '../services/api_client.dart';
 import '../utils/error_helper.dart';
@@ -553,8 +554,13 @@ class _CreateStaffPageState extends State<_CreateStaffPage> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
+      String errorMsg = friendlyError(e);
+      // Попробуем получить более специфичную ошибку от бэка
+      if (e is DioException) {
+        errorMsg = e.response?.data?['error']?.toString() ?? errorMsg;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(e))),
+        SnackBar(content: Text(errorMsg)),
       );
       setState(() => _saving = false);
     }
