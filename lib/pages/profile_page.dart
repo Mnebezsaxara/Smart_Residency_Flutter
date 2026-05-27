@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import 'change_password_dialog.dart';
 import 'login_page.dart';
 import 'ownership_verification_page.dart';
 import 'register_flow_page.dart';
@@ -102,10 +103,71 @@ class _ProfilePageState extends State<ProfilePage> {
     _reloadProfile();
   }
 
+  Future<void> _showSettingsMenu() async {
+    final selection = await showMenu<String>(
+      context: context,
+      position: const RelativeRect.fromLTRB(100, 0, 0, 0),
+      items: [
+        const PopupMenuItem(
+          value: 'change_password',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lock_outline, size: 20),
+              SizedBox(width: 12),
+              Text('Сменить пароль'),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'sign_out',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.logout, size: 20, color: Colors.red),
+              SizedBox(width: 12),
+              Text('Выйти', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (!mounted) return;
+
+    switch (selection) {
+      case 'change_password':
+        showDialog(
+          context: context,
+          builder: (_) => const ChangePasswordDialog(),
+        );
+        break;
+      case 'sign_out':
+        await _auth.signOut();
+        if (mounted) _reloadProfile();
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Профиль')),
+      appBar: AppBar(
+        title: const Text('Профиль'),
+        actions: [
+          StreamBuilder<AppUser?>(
+            stream: _auth.authStateChanges,
+            builder: (context, snapshot) {
+              if (snapshot.data == null) return const SizedBox.shrink();
+              return IconButton(
+                onPressed: _showSettingsMenu,
+                icon: const Icon(Icons.settings),
+                tooltip: 'Настройки',
+              );
+            },
+          ),
+        ],
+      ),
       body: SafeArea(
         child: StreamBuilder<AppUser?>(
           stream: _auth.authStateChanges,
@@ -253,18 +315,6 @@ class _ProfilePageState extends State<ProfilePage> {
                           subtitle: const Text('Управление зарегистрированными авто'),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VehiclesPage())),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.tonal(
-                          onPressed: () async {
-                            await _auth.signOut();
-                            if (!mounted) return;
-                            _reloadProfile();
-                          },
-                          child: const Text('Выйти'),
                         ),
                       ),
                       const SizedBox(height: 24),
