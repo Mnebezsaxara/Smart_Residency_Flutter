@@ -406,12 +406,16 @@ class _RequestCard extends StatelessWidget {
                   const Icon(Icons.person_outline,
                       size: 14, color: Colors.grey),
                   const SizedBox(width: 4),
-                  Text(
-                    'Назначено: ${request.assignedToName}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: Colors.grey[600]),
+                  Expanded(
+                    child: Text(
+                      'Назначено: ${request.assignedToName}',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: Colors.grey[600]),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   if (request.takenAt != null) ...[
                     const SizedBox(width: 10),
