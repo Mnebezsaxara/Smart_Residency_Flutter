@@ -14,7 +14,6 @@ import '../services/sse_service.dart';
 import '../widgets/sensor_widgets.dart';
 import 'admin_sensors_page.dart';
 import 'admin_verification_page.dart';
-import 'announcements_page.dart';
 import 'barrier_page.dart';
 import 'guests_page.dart';
 import 'news_page.dart';
@@ -148,7 +147,7 @@ class _DashboardPageState extends State<DashboardPage>
   static int _pageCountForRole(String role) {
     if (role == 'staff') return 2;
     if (role == 'guard') return 4;
-    if (role == 'admin') return 6;
+    if (role == 'admin') return 5;
     return 5;
   }
 
@@ -183,14 +182,7 @@ class _DashboardPageState extends State<DashboardPage>
       const ParkingPage(),
     ];
 
-    if (_role == 'admin') {
-      pages.addAll([
-        const NewsPage(),
-        const ProfilePage(),
-      ]);
-    } else {
-      pages.add(const ProfilePage());
-    }
+    pages.add(const ProfilePage());
 
     return pages;
   }
@@ -250,10 +242,6 @@ class _DashboardPageState extends State<DashboardPage>
     if (_role == 'admin') {
       return [
         ...items,
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.newspaper_outlined),
-          label: 'Новости',
-        ),
         const BottomNavigationBarItem(
           icon: Icon(Icons.person_outline),
           label: 'Профиль',
@@ -468,7 +456,7 @@ class _HomeOverviewTab extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const AnnouncementsPage(),
+                        builder: (_) => const NewsPage(),
                       ),
                     );
                   },
@@ -579,7 +567,7 @@ class _HomeOverviewTab extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const AnnouncementsPage(),
+                        builder: (_) => const NewsPage(),
                       ),
                     );
                   },
