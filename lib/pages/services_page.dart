@@ -94,21 +94,15 @@ const Map<String, _SpecialtyMeta> _kSpecialtyMeta = {
     fallbackDescription:
         'Плановое техническое обслуживание и аварийный ремонт лифтового оборудования.',
   ),
+  'security': _SpecialtyMeta(
+    title: 'Охрана',
+    subtitle: 'Вопросы безопасности',
+    icon: Icons.security_outlined,
+    categories: ['Паркинг'],
+    fallbackDescription:
+        'Контроль доступа на территорию ЖК, видеонаблюдение, реагирование на вызовы.',
+  ),
 };
-
-/// Карточка «Охрана» статична — отдельной специальности у неё нет.
-const _kSecurityService = ServiceInfo(
-  title: 'Охрана',
-  subtitle: 'Вопросы безопасности',
-  icon: Icons.security_outlined,
-  staffName: 'Служба охраны ЖК',
-  phone: '+7 705 678 9012',
-  hours: 'Круглосуточно',
-  available: true,
-  description:
-      'Контроль доступа на территорию ЖК, видеонаблюдение, реагирование на вызовы.',
-  categories: [],
-);
 
 ServiceInfo _buildServiceInfo(_SpecialtyMeta meta, StaffMember? staff) {
   if (staff == null) {
@@ -180,7 +174,6 @@ class _ServicesPageState extends State<ServicesPage> {
         final firstStaff = staffList?.isNotEmpty == true ? staffList!.first : null;
         services.add(_buildServiceInfo(meta, firstStaff));
       });
-      services.add(_kSecurityService);
       if (!mounted) return;
       setState(() {
         _services = services;
@@ -193,7 +186,6 @@ class _ServicesPageState extends State<ServicesPage> {
       _kSpecialtyMeta.forEach((_, meta) {
         services.add(_buildServiceInfo(meta, null));
       });
-      services.add(_kSecurityService);
       setState(() {
         _services = services;
         _error = 'Не удалось загрузить сотрудников: $e';

@@ -236,7 +236,8 @@ class AuthService {
       return LoginResult.success();
     } on DioException catch (e) {
       debugPrint('[Auth] /auth/login failed: status=${e.response?.statusCode} '
-          'data=${e.response?.data}');
+          'data=${e.response?.data} type=${e.type} msg=${e.message} '
+          'uri=${e.requestOptions.uri} err=${e.error}');
       // Бэк может вернуть password_change_required не как 2xx (напр. 401/403).
       // Тогда исключение прилетает сюда — проверяем тело ответа.
       final pwdChange = _tryPasswordChange(e.response?.data, email);
