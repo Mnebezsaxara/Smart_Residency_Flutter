@@ -114,17 +114,38 @@ class NotificationsService {
   static const _parkingChannelDescription =
       'Уведомления о парковочных местах';
 
+  static const _serviceRequestsChannelId = 'service_requests_v1';
+  static const _serviceRequestsChannelName = 'Заявки на обслуживание';
+  static const _serviceRequestsChannelDescription =
+      'Уведомления о статусе заявок: создание, назначение, выполнение';
+
+  static const _newsChannelId = 'news_v1';
+  static const _newsChannelName = 'Новости и объявления';
+  static const _newsChannelDescription =
+      'Уведомления о новых объявлениях управляющей компании';
+
   static final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
 
   final _eventController = StreamController<Map<String, String>>.broadcast();
   final _inAppController = StreamController<({String title, String body})>.broadcast();
+  final _serviceRequestController =
+      StreamController<Map<String, String>>.broadcast();
+  final _newsController = StreamController<Map<String, String>>.broadcast();
 
   /// Поток FCM-пэйлоадов, по которым UI должен перезапросить события.
   Stream<Map<String, String>> get sensorAlerts => _eventController.stream;
 
   /// Поток для показа уведомлений внутри открытого приложения.
   Stream<({String title, String body})> get inAppNotifications => _inAppController.stream;
+
+  /// Поток событий жизненного цикла заявок (service_request_*).
+  /// Подписчики — список заявок и колокольчик — перезагружают данные.
+  Stream<Map<String, String>> get serviceRequestEvents =>
+      _serviceRequestController.stream;
+
+  /// Поток событий новых новостей. Подписчики — экран новостей и колокольчик.
+  Stream<Map<String, String>> get newsEvents => _newsController.stream;
 
   /// Тап по пушу — данные сообщения, по которому пользователь открыл приложение.
   /// Нужен для навигации в нужный экран после холодного запуска / из бэкграунда.
@@ -196,6 +217,22 @@ class NotificationsService {
         _parkingChannelId,
         _parkingChannelName,
         description: _parkingChannelDescription,
+        importance: Importance.high,
+      ),
+    );
+    await androidImpl?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _serviceRequestsChannelId,
+        _serviceRequestsChannelName,
+        description: _serviceRequestsChannelDescription,
+        importance: Importance.high,
+      ),
+    );
+    await androidImpl?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _newsChannelId,
+        _newsChannelName,
+        description: _newsChannelDescription,
         importance: Importance.high,
       ),
     );
@@ -359,6 +396,22 @@ class NotificationsService {
         _parkingChannelId,
         _parkingChannelName,
         description: _parkingChannelDescription,
+        importance: Importance.high,
+      ),
+    );
+    await androidImpl?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _serviceRequestsChannelId,
+        _serviceRequestsChannelName,
+        description: _serviceRequestsChannelDescription,
+        importance: Importance.high,
+      ),
+    );
+    await androidImpl?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _newsChannelId,
+        _newsChannelName,
+        description: _newsChannelDescription,
         importance: Importance.high,
       ),
     );
@@ -568,6 +621,71 @@ class NotificationsService {
       return;
     }
 
+    if (kind.startsWith('service_request_')) {
+      final requestId = data['request_id'] ?? '';
+      final category = data['category'] ?? '';
+      final title = data['title'] ?? _defaultServiceRequestTitle(kind, category);
+      final body = data['body'] ?? '';
+      final notifId = (requestId + kind).hashCode & 0x7fffffff;
+      await _local.show(
+        notifId,
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _serviceRequestsChannelId,
+            _serviceRequestsChannelName,
+            channelDescription: _serviceRequestsChannelDescription,
+            importance: Importance.high,
+            priority: Priority.high,
+            visibility: NotificationVisibility.public,
+            playSound: true,
+            enableVibration: true,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: '$kind:$requestId',
+      );
+      return;
+    }
+
+    if (kind == 'news_post') {
+      final newsId = data['news_id'] ?? '';
+      final title = data['title'] ?? 'Новое объявление';
+      final body = data['body'] ?? '';
+      final notifId = newsId.isNotEmpty
+          ? newsId.hashCode & 0x7fffffff
+          : DateTime.now().millisecondsSinceEpoch & 0x7fffffff;
+      await _local.show(
+        notifId,
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _newsChannelId,
+            _newsChannelName,
+            channelDescription: _newsChannelDescription,
+            importance: Importance.high,
+            priority: Priority.high,
+            visibility: NotificationVisibility.public,
+            playSound: true,
+            enableVibration: true,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: 'news_post:$newsId',
+      );
+      return;
+    }
+
     if (kind == 'parking_no_permit') {
       final plate = data['plate_number'] ?? '';
       final eventId = data['event_id'] ?? '';
@@ -661,9 +779,30 @@ class NotificationsService {
         kind == 'parking_spot_freed' ||
         kind == 'parking_no_permit') {
       ParkingService.instance.refreshFromPush(data);
+    } else if (kind.startsWith('service_request_')) {
+      _serviceRequestController.add(data);
+    } else if (kind == 'news_post') {
+      _newsController.add(data);
     }
     // guest_arrived: only a local notification banner, no stream update needed
     _emitInApp(data);
+  }
+
+  static String _defaultServiceRequestTitle(String kind, String category) {
+    switch (kind) {
+      case 'service_request_new':
+        return category.isNotEmpty ? 'Новая заявка: $category' : 'Новая заявка';
+      case 'service_request_taken':
+        return 'Заявка взята в работу';
+      case 'service_request_assigned':
+        return 'Назначена заявка';
+      case 'service_request_done':
+        return 'Заявка выполнена';
+      case 'service_request_rejected':
+        return 'Заявка отклонена';
+      default:
+        return 'Заявка';
+    }
   }
 
   void _emitInApp(Map<String, String> data) {
@@ -692,6 +831,17 @@ class NotificationsService {
             (plate.isNotEmpty
                 ? 'Автомобиль $plate не имеет пропуска'
                 : 'Автомобиль без пропуска на гостевом месте');
+      case 'service_request_new':
+      case 'service_request_taken':
+      case 'service_request_assigned':
+      case 'service_request_done':
+      case 'service_request_rejected':
+        title = data['title'] ??
+            _defaultServiceRequestTitle(kind, data['category'] ?? '');
+        body = data['body'] ?? '';
+      case 'news_post':
+        title = data['title'] ?? 'Новое объявление';
+        body = data['body'] ?? '';
       default:
         debugPrint('[FCM] _emitInApp: unknown kind=$kind, skipping');
         return;
@@ -721,6 +871,12 @@ class NotificationsService {
     }
     if (kind == 'parking_no_permit') {
       return {'kind': 'parking_no_permit', 'event_id': extra};
+    }
+    if (kind.startsWith('service_request_')) {
+      return {'kind': kind, 'request_id': extra};
+    }
+    if (kind == 'news_post') {
+      return {'kind': 'news_post', 'news_id': extra};
     }
     return {'kind': 'sensor_alert', 'event_id': payload};
   }

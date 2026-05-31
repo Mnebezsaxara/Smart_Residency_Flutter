@@ -50,7 +50,13 @@ class ApiClient {
   String? get token => _prefs.getString('token');
   String? get userId => _prefs.getString('user_id');
   String? get userRole => _prefs.getString('user_role');
+  String? get userSpecialty => _prefs.getString('user_specialty');
   bool get isLoggedIn => token != null;
+
+  /// true для сотрудника-охранника (staff со specialty='security').
+  /// Ему доступен тот же интерфейс, что был у бывшей роли guard.
+  bool get isSecurityStaff =>
+      userRole == 'staff' && userSpecialty == 'security';
 
   Future<void> saveSession({
     required String token,
@@ -66,10 +72,19 @@ class ApiClient {
     await _prefs.setString('user_role', role);
   }
 
+  Future<void> updateSpecialty(String? specialty) async {
+    if (specialty == null || specialty.isEmpty) {
+      await _prefs.remove('user_specialty');
+    } else {
+      await _prefs.setString('user_specialty', specialty);
+    }
+  }
+
   Future<void> clearSession() async {
     await _prefs.remove('token');
     await _prefs.remove('user_id');
     await _prefs.remove('user_role');
+    await _prefs.remove('user_specialty');
   }
 
   Future<Response> get(String path, {Map<String, dynamic>? params}) =>

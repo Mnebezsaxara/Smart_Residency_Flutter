@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../models/notification_item.dart';
-import '../services/notification_center_service.dart';
 import '../services/api_client.dart';
+import '../services/notification_center_service.dart';
+import '../services/notifications_service.dart';
+import 'news_page.dart';
+import 'service_requests_page.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -14,12 +19,27 @@ class _NotificationsPageState extends State<NotificationsPage> {
   late final NotificationCenterService _svc;
   List<NotificationItem> _items = [];
   bool _loading = true;
+  StreamSubscription<Map<String, String>>? _reqSub;
+  StreamSubscription<Map<String, String>>? _newsSub;
 
   @override
   void initState() {
     super.initState();
     _svc = NotificationCenterService(ApiClient.instance);
     _load();
+    _reqSub = NotificationsService.instance.serviceRequestEvents.listen((_) {
+      if (mounted) _load();
+    });
+    _newsSub = NotificationsService.instance.newsEvents.listen((_) {
+      if (mounted) _load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _reqSub?.cancel();
+    _newsSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -36,10 +56,24 @@ class _NotificationsPageState extends State<NotificationsPage> {
     await _load();
   }
 
-  Future<void> _markRead(NotificationItem item) async {
-    if (!item.isUnread) return;
-    await _svc.markRead(item.id);
-    await _load();
+  Future<void> _onTileTap(NotificationItem item) async {
+    if (item.isUnread) {
+      await _svc.markRead(item.id);
+      await _load();
+    }
+    if (!mounted) return;
+    final kind = item.kind;
+    if (kind.startsWith('service_request_')) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ServiceRequestsPage()),
+      );
+    } else if (kind == 'news_post') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const NewsPage()),
+      );
+    }
   }
 
   @override
@@ -69,7 +103,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       final n = _items[i];
                       return _NotificationTile(
                         item: n,
-                        onTap: () => _markRead(n),
+                        onTap: () => _onTileTap(n),
                       );
                     },
                   ),
@@ -197,6 +231,24 @@ class _KindIcon extends StatelessWidget {
       case 'sensor_offline':
         icon = Icons.wifi_off;
         color = Colors.grey;
+      case 'service_request_new':
+        icon = Icons.assignment_outlined;
+        color = Colors.blue;
+      case 'service_request_taken':
+        icon = Icons.engineering_outlined;
+        color = Colors.orange;
+      case 'service_request_assigned':
+        icon = Icons.assignment_ind_outlined;
+        color = Colors.deepPurple;
+      case 'service_request_done':
+        icon = Icons.task_alt;
+        color = Colors.green;
+      case 'service_request_rejected':
+        icon = Icons.cancel_outlined;
+        color = Colors.red;
+      case 'news_post':
+        icon = Icons.campaign_outlined;
+        color = Colors.teal;
       default:
         icon = Icons.notifications;
         color = Colors.blue;

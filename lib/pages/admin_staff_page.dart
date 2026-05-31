@@ -12,6 +12,7 @@ const Map<String, String> kStaffSpecialties = {
   'garbage': 'Вывоз мусора',
   'intercom': 'Домофон',
   'elevator': 'Ремонт лифтов',
+  'security': 'Охранник',
 };
 
 // ─────────────────────────────────────────────────────
@@ -495,14 +496,15 @@ class _CreateStaffPageState extends State<_CreateStaffPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final res = await ApiClient.instance.post('/admin/staff', data: {
+      final body = <String, dynamic>{
         'full_name': _fullName.text.trim(),
         'email': _email.text.trim(),
         'phone': _phone.text.trim(),
+        'description': _description.text.trim(),
         'specialty': _specialty,
         'work_schedule': _workSchedule.text.trim(),
-        'description': _description.text.trim(),
-      });
+      };
+      final res = await ApiClient.instance.post('/admin/staff', data: body);
       if (!mounted) return;
 
       final tempPassword = res.data?['temporary_password']?.toString() ?? '';
@@ -660,7 +662,8 @@ class _CreateStaffPageState extends State<_CreateStaffPage> {
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.schedule_outlined),
                 ),
-                validator: (v) => _requiredValidator(v, label: 'Режим работы'),
+                validator: (v) =>
+                    _requiredValidator(v, label: 'Режим работы'),
               ),
               const SizedBox(height: 12),
               TextFormField(

@@ -93,14 +93,14 @@ class _ResidentParkingPageState extends State<_ResidentParkingPage> {
     }
   }
 
-  Future<void> _reportToAdmin(ParkingSpot spot) async {
+  Future<void> _reportToSecurity(ParkingSpot spot) async {
     try {
       await ApiClient.instance.post('/service-requests', data: {
-        'category': 'Паркинг',
+        'category': 'Парковка',
         'description': 'Моё постоянное место ${spot.spotNumber} занято посторонним ТС.',
       });
       if (!mounted) return;
-      _snack('Заявка администратору отправлена');
+      _snack('Заявка охраннику отправлена');
     } catch (e) {
       if (!mounted) return;
       _snack(friendlyError(e));
@@ -147,7 +147,7 @@ class _ResidentParkingPageState extends State<_ResidentParkingPage> {
                       if (_myPermanentSpot != null) ...[
                         _PermanentSpotCard(
                           spot: _myPermanentSpot!,
-                          onReport: () => _reportToAdmin(_myPermanentSpot!),
+                          onReport: () => _reportToSecurity(_myPermanentSpot!),
                         ),
                         const SizedBox(height: 20),
                       ],
@@ -486,8 +486,8 @@ class _PermanentSpotCard extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: onReport,
                   style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                  icon: const Icon(Icons.report_outlined),
-                  label: const Text('Сообщить администратору'),
+                  icon: const Icon(Icons.shield_outlined),
+                  label: const Text('Сообщить охраннику'),
                 ),
               ),
             ],

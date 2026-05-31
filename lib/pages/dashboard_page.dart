@@ -40,6 +40,7 @@ class _DashboardPageState extends State<DashboardPage>
   int _index = 0;
   bool _loadingRole = true;
   String _role = 'resident';
+  String _specialty = '';
   bool _isLoggedIn = false;
   String _verificationStatus = 'not_submitted';
   String _parkingPermitStatus = '';
@@ -81,21 +82,24 @@ class _DashboardPageState extends State<DashboardPage>
       }
       final res = await _api.get('/auth/me');
       final role = (res.data['role'] ?? 'resident').toString();
+      final specialty = (res.data['specialty'] ?? '').toString();
       final verification =
           (res.data['verification_status'] ?? 'not_submitted').toString();
       final parkingPermit =
           (res.data['parking_permit_status'] ?? '').toString();
       final userId = res.data['id']?.toString();
       await _api.updateRole(role);
+      await _api.updateSpecialty(specialty);
       if (!mounted) return;
       setState(() {
         _role = role;
+        _specialty = specialty;
         _userId = userId;
         _isLoggedIn = true;
         _verificationStatus = verification;
         _parkingPermitStatus = parkingPermit;
         _loadingRole = false;
-        final pageCount = _pageCountForRole(role);
+        final pageCount = _pageCountForRole(role, specialty);
         if (_index >= pageCount) _index = 0;
       });
       if (role == 'admin') {
@@ -131,38 +135,54 @@ class _DashboardPageState extends State<DashboardPage>
     if (!mounted || !_isLoggedIn) return;
     final data = NotificationsService.instance.consumePendingOpenedMessage();
     if (data == null) return;
-    if (data['kind'] != 'sensor_alert') return;
-    final eventId = data['event_id'];
-    final isAdmin = _role == 'admin';
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => isAdmin
-            ? AdminSensorsPage(highlightEventId: eventId)
-            : SensorsPage(highlightEventId: eventId),
-      ),
-    );
+    final kind = data['kind'] ?? '';
+    if (kind == 'sensor_alert') {
+      final eventId = data['event_id'];
+      final isAdmin = _role == 'admin';
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => isAdmin
+              ? AdminSensorsPage(highlightEventId: eventId)
+              : SensorsPage(highlightEventId: eventId),
+        ),
+      );
+    } else if (kind.startsWith('service_request_')) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ServiceRequestsPage()),
+      );
+    } else if (kind == 'news_post') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const NewsPage()),
+      );
+    }
   }
 
-  static int _pageCountForRole(String role) {
+  /// Охранник — это staff со specialty='security'. Ему положен тот же набор
+  /// экранов, что был у прежней роли guard, плюс «Заявки».
+  bool get _isSecurity => _role == 'staff' && _specialty == 'security';
+
+  static int _pageCountForRole(String role, String specialty) {
+    if (role == 'staff' && specialty == 'security') return 5;
     if (role == 'staff') return 2;
-    if (role == 'guard') return 4;
-    if (role == 'admin') return 5;
     return 5;
   }
 
   List<Widget> get _pages {
-    if (_role == 'staff') {
-      return [
-        const ServiceRequestsPage(),
-        const ProfilePage(),
-      ];
-    }
-    if (_role == 'guard') {
+    if (_isSecurity) {
       return [
         const BarrierPage(),
         const ParkingPage(),
         const GuestsPage(),
+        const ServiceRequestsPage(),
+        const ProfilePage(),
+      ];
+    }
+    if (_role == 'staff') {
+      return [
+        const ServiceRequestsPage(),
         const ProfilePage(),
       ];
     }
@@ -188,19 +208,7 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   List<BottomNavigationBarItem> get _items {
-    if (_role == 'staff') {
-      return const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.build_outlined),
-          label: 'Заявки',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          label: 'Профиль',
-        ),
-      ];
-    }
-    if (_role == 'guard') {
+    if (_isSecurity) {
       return const [
         BottomNavigationBarItem(
           icon: Icon(Icons.garage_outlined),
@@ -213,6 +221,22 @@ class _DashboardPageState extends State<DashboardPage>
         BottomNavigationBarItem(
           icon: Icon(Icons.badge_outlined),
           label: 'Гости',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.build_outlined),
+          label: 'Заявки',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          label: 'Профиль',
+        ),
+      ];
+    }
+    if (_role == 'staff') {
+      return const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.build_outlined),
+          label: 'Заявки',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.person_outline),
@@ -274,7 +298,7 @@ class _DashboardPageState extends State<DashboardPage>
         type: BottomNavigationBarType.fixed,
         onTap: (i) {
           setState(() => _index = i);
-          if (i == 0 && _role != 'staff' && _role != 'guard') _loadRole();
+          if (i == 0 && _role != 'staff') _loadRole();
         },
       ),
     );

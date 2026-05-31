@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
+import '../services/notifications_service.dart';
 import '../widgets/create_request_sheet.dart';
 
 String buildPhotoUrl(String path) {
@@ -25,6 +28,7 @@ String specialtyLabel(String specialty) => switch (specialty) {
       'garbage' => 'Вывоз мусора',
       'intercom' => 'Домофон',
       'elevator' => 'Ремонт лифтов',
+      'security' => 'Охранник',
       _ => specialty,
     };
 
@@ -41,20 +45,32 @@ class _ServiceRequestsPageState extends State<ServiceRequestsPage> {
 
   bool get _isAdmin => _api.userRole == 'admin';
   bool get _isStaff => _api.userRole == 'staff';
+  bool get _isResident => !_isAdmin && !_isStaff;
 
   String _query = '';
   String? _filter;
   bool _loading = true;
   String? _error;
   List<_RequestItem> _requests = [];
+  StreamSubscription<Map<String, String>>? _pushSub;
 
   @override
   void initState() {
     super.initState();
     _loadRequests();
+    _pushSub =
+        NotificationsService.instance.serviceRequestEvents.listen((_) {
+      if (mounted) _loadRequests();
+    });
     if (widget.prefilledTitle != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _showCreateSheet());
     }
+  }
+
+  @override
+  void dispose() {
+    _pushSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _showCreateSheet() async {
@@ -181,7 +197,7 @@ class _ServiceRequestsPageState extends State<ServiceRequestsPage> {
     }).toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Заявки')),
+      appBar: AppBar(title: Text(_isResident ? 'Мои заявки' : 'Заявки')),
       body: SafeArea(
         child: Column(
           children: [
@@ -621,7 +637,8 @@ class _StatusChip extends StatelessWidget {
       };
 
   Color _color(String v) => switch (v) {
-        'in_progress' => Colors.orange,
+        'assigned' => Colors.orange,
+        'in_progress' => Colors.blue,
         'done' => Colors.green,
         'rejected' => Colors.red,
         _ => Colors.grey,

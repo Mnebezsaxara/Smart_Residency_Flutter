@@ -357,10 +357,13 @@ class _CreateNewsSheet extends StatefulWidget {
 }
 
 class _CreateNewsSheetState extends State<_CreateNewsSheet> {
+  static const int _entranceCount = 5;
+
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
   bool _isPinned = false;
   bool _forAllEntrances = true;
+  int _selectedEntrance = 1;
   bool _loading = false;
 
   @override
@@ -388,7 +391,7 @@ class _CreateNewsSheetState extends State<_CreateNewsSheet> {
         data: {
           'title': _titleController.text.trim(),
           'body': _bodyController.text.trim(),
-          'entrance': _forAllEntrances ? null : 1,
+          'entrance': _forAllEntrances ? null : _selectedEntrance,
           'is_pinned': _isPinned,
         },
       );
@@ -444,6 +447,29 @@ class _CreateNewsSheetState extends State<_CreateNewsSheet> {
               title: const Text('Для всех подъездов'),
               controlAffinity: ListTileControlAffinity.leading,
             ),
+            if (!_forAllEntrances) ...[
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: DropdownButtonFormField<int>(
+                  initialValue: _selectedEntrance,
+                  decoration: const InputDecoration(
+                    labelText: 'Подъезд',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.apartment),
+                  ),
+                  items: List.generate(_entranceCount, (i) => i + 1)
+                      .map((n) => DropdownMenuItem(
+                            value: n,
+                            child: Text('Подъезд $n'),
+                          ))
+                      .toList(),
+                  onChanged: _loading
+                      ? null
+                      : (v) => setState(() => _selectedEntrance = v ?? 1),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             Row(
               children: [
