@@ -28,11 +28,13 @@ sealed class LoginResult {
     required String temporaryToken,
     required String email,
     required String role,
+    required String specialty,
   }) =>
       _PasswordChangeRequiredLoginResult(
         temporaryToken: temporaryToken,
         email: email,
         role: role,
+        specialty: specialty,
       );
 
   T when<T>({
@@ -42,6 +44,7 @@ sealed class LoginResult {
       String temporaryToken,
       String email,
       String role,
+      String specialty,
     ) onPasswordChangeRequired,
   }) =>
       switch (this) {
@@ -51,8 +54,9 @@ sealed class LoginResult {
           temporaryToken: final token,
           email: final email,
           role: final role,
+          specialty: final specialty,
         ) =>
-          onPasswordChangeRequired(token, email, role),
+          onPasswordChangeRequired(token, email, role, specialty),
       };
 }
 
@@ -69,11 +73,13 @@ class _PasswordChangeRequiredLoginResult extends LoginResult {
   final String temporaryToken;
   final String email;
   final String role;
+  final String specialty;
 
   const _PasswordChangeRequiredLoginResult({
     required this.temporaryToken,
     required this.email,
     required this.role,
+    required this.specialty,
   });
 }
 
@@ -214,21 +220,32 @@ class AuthService {
 
       final status = res.data['status'] as String?;
 
-      // Проверяем требуется ли смена пароля при первом входе
+      // Первый вход с временным паролем: токен временный, /auth/me здесь
+      // вызывать нельзя (он отдаст 401). role/specialty приходят вложенными
+      // в объект `user` прямо в ответе логина — берём их оттуда.
       if (status == 'password_change_required') {
         final token = res.data['token'] as String;
-        final role = res.data['role'] as String? ?? 'resident';
+        final user = res.data['user'] as Map?;
+        final role =
+            (user?['role'] ?? res.data['role'] ?? 'resident').toString();
+        final specialty =
+            (user?['specialty'] ?? res.data['specialty'] ?? '').toString();
+        final userEmail = (user?['email'] ?? email.trim()).toString();
         return LoginResult.passwordChangeRequired(
           temporaryToken: token,
-          email: email.trim(),
+          email: userEmail,
           role: role,
+          specialty: specialty,
         );
       }
 
+      // Обычный вход: role и specialty приходят прямо в ответе /auth/login.
       final token = res.data['token'] as String;
       final userId = res.data['user_id'] as String;
       final role = res.data['role'] as String? ?? 'resident';
+      final specialty = res.data['specialty'] as String? ?? '';
       await _api.saveSession(token: token, userId: userId, role: role);
+      await _api.updateSpecialty(specialty);
 
       _currentUser = AppUser(id: userId, email: email.trim());
       _controller.add(_currentUser);

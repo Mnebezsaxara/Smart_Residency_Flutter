@@ -7,12 +7,14 @@ class ChangePasswordOnFirstLoginPage extends StatefulWidget {
   final String temporaryToken;
   final String email;
   final String role;
+  final String specialty;
 
   const ChangePasswordOnFirstLoginPage({
     super.key,
     required this.temporaryToken,
     required this.email,
     required this.role,
+    this.specialty = '',
   });
 
   @override
@@ -72,6 +74,9 @@ class _ChangePasswordOnFirstLoginPageState
         userId: res.data['user_id'] as String? ?? '',
         role: widget.role,
       );
+      // Сохраняем specialty (для охранника = 'security'), полученный из
+      // ответа логина, чтобы dashboard сразу показал нужные вкладки.
+      await ApiClient.instance.updateSpecialty(widget.specialty);
 
       // Возвращаемся в главное приложение
       if (mounted) {

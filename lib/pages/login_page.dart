@@ -50,7 +50,7 @@ class _LoginPageState extends State<LoginPage> {
           SnackBar(content: Text(error)),
         );
       },
-      onPasswordChangeRequired: (temporaryToken, email, role) async {
+      onPasswordChangeRequired: (temporaryToken, email, role, specialty) async {
         // Показываем экран смены пароля
         final changed = await Navigator.of(context).push<bool>(
           MaterialPageRoute(
@@ -58,6 +58,7 @@ class _LoginPageState extends State<LoginPage> {
               temporaryToken: temporaryToken,
               email: email,
               role: role,
+              specialty: specialty,
             ),
           ),
         );
