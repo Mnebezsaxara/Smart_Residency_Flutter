@@ -65,3 +65,15 @@ android/local.properties
 # Claude Code local settings
 .claude/settings.local.json
 CLAUDE.md
+
+# Учебные/рабочие артефакты — держим локально, в репо не пушим
+changes.md
+DEMO_FLUTTER.md
+FIXES.md
+fixess.md
+MESSAGE_TO_BACKEND.md
+fix_1.jpg
+fix_2.jpg
+fixes_screenshots/
+docs/bug_report.md
+docs/images/
