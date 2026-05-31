@@ -218,26 +218,9 @@ class AuthService {
         'password': password.trim(),
       });
 
-      final status = res.data['status'] as String?;
-
-      // Первый вход с временным паролем: токен временный, /auth/me здесь
-      // вызывать нельзя (он отдаст 401). role/specialty приходят вложенными
-      // в объект `user` прямо в ответе логина — берём их оттуда.
-      if (status == 'password_change_required') {
-        final token = res.data['token'] as String;
-        final user = res.data['user'] as Map?;
-        final role =
-            (user?['role'] ?? res.data['role'] ?? 'resident').toString();
-        final specialty =
-            (user?['specialty'] ?? res.data['specialty'] ?? '').toString();
-        final userEmail = (user?['email'] ?? email.trim()).toString();
-        return LoginResult.passwordChangeRequired(
-          temporaryToken: token,
-          email: userEmail,
-          role: role,
-          specialty: specialty,
-        );
-      }
+      // Первый вход с временным паролем может прийти как 2xx — обрабатываем.
+      final pwdChange = _tryPasswordChange(res.data, email);
+      if (pwdChange != null) return pwdChange;
 
       // Обычный вход: role и specialty приходят прямо в ответе /auth/login.
       final token = res.data['token'] as String;
@@ -252,6 +235,13 @@ class AuthService {
       unawaited(NotificationsService.instance.syncTokenWithBackend());
       return LoginResult.success();
     } on DioException catch (e) {
+      debugPrint('[Auth] /auth/login failed: status=${e.response?.statusCode} '
+          'data=${e.response?.data}');
+      // Бэк может вернуть password_change_required не как 2xx (напр. 401/403).
+      // Тогда исключение прилетает сюда — проверяем тело ответа.
+      final pwdChange = _tryPasswordChange(e.response?.data, email);
+      if (pwdChange != null) return pwdChange;
+
       if (e.response?.statusCode == 401) {
         return LoginResult.error('Неверный email или пароль');
       }
@@ -261,6 +251,31 @@ class AuthService {
     } catch (e) {
       return LoginResult.error('Неизвестная ошибка: $e');
     }
+  }
+
+  /// Если тело ответа `/auth/login` означает «требуется смена пароля при
+  /// первом входе» — собирает соответствующий [LoginResult]. Иначе null.
+  ///
+  /// role/specialty/email приходят вложенными в объект `user`
+  /// ({status, token, user:{id,email,role,specialty}}), с фолбэком на
+  /// top-level. /auth/me здесь дёргать нельзя — токен временный (даёт 401).
+  LoginResult? _tryPasswordChange(dynamic data, String email) {
+    if (data is! Map) return null;
+    if (data['status']?.toString() != 'password_change_required') return null;
+    final token = data['token']?.toString();
+    if (token == null || token.isEmpty) return null;
+    final user = data['user'];
+    final userMap = user is Map ? user : const {};
+    final role = (userMap['role'] ?? data['role'] ?? 'resident').toString();
+    final specialty =
+        (userMap['specialty'] ?? data['specialty'] ?? '').toString();
+    final userEmail = (userMap['email'] ?? email.trim()).toString();
+    return LoginResult.passwordChangeRequired(
+      temporaryToken: token,
+      email: userEmail,
+      role: role,
+      specialty: specialty,
+    );
   }
 
   Future<void> signOut() async {
