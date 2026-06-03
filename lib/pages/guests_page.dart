@@ -191,27 +191,13 @@ class _GuestsPageState extends State<GuestsPage> {
     }
   }
 
-  /// Места, к которым у меня есть пропуск, но гость ещё НЕ приехал (status='active').
-  /// Только их стоит считать «незаконно занятыми», если место красное.
-  Set<String> get _pendingPassSpotIds => _passes
-      .where((p) => p.status == 'active' && p.parkingSpotId != null)
-      .map((p) => p.parkingSpotId!)
-      .toSet();
-
-  /// Места, где мой гость уже на территории. На них тапать «Сообщить» НЕ нужно —
-  /// машина там законно.
-  Set<String> get _arrivedPassSpotIds => _passes
-      .where((p) => p.status == 'arrived' && p.parkingSpotId != null)
-      .map((p) => p.parkingSpotId!)
-      .toSet();
-
   Future<void> _reportGuestSpotToAdmin(ParkingSpot spot) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Гостевое место занято'),
         content: Text(
-          'Место ${spot.spotNumber} занято, хотя для него есть активный пропуск. Сообщить администратору?',
+          'Место ${spot.spotNumber} занято посторонним ТС. Сообщить администратору?',
         ),
         actions: [
           TextButton(
@@ -230,7 +216,7 @@ class _GuestsPageState extends State<GuestsPage> {
     try {
       await _api.post('/service-requests', data: {
         'category': 'Паркинг',
-        'description': 'Гостевое место ${spot.spotNumber} занято посторонним ТС, хотя для него есть активный гостевой пропуск.',
+        'description': 'Гостевое место ${spot.spotNumber} занято посторонним ТС.',
       });
       if (!mounted) return;
       _snack('Заявка администратору отправлена');
@@ -291,40 +277,39 @@ class _GuestsPageState extends State<GuestsPage> {
                               final isFree = spot.status == ParkingSpotStatus.free;
                               final isReserved = spot.status == ParkingSpotStatus.reserved;
                               final isSelected = _selectedGuestSpotId == spot.id;
+                              // Тревога приходит с сервера (spot.alert): место занято
+                              // посторонним ТС, ожидаемый гость ещё не въехал. Никогда
+                              // не выводим тревогу из status == occupied.
+                              final isAlert = spot.alert;
+                              // Занято легально: гость уже на территории (occupied,
+                              // но тревоги нет).
+                              final isMyGuestArrived =
+                                  !isFree && !isReserved && !isAlert;
                               final color = isSelected
                                   ? Colors.blue
+                                  : isAlert
+                                      ? Colors.red
+                                      : isFree
+                                          ? Colors.green
+                                          : Colors.blue;
+                              final label = isAlert
+                                  ? 'Чужой ТС'
                                   : isFree
-                                      ? Colors.green
+                                      ? 'Своб.'
                                       : isReserved
-                                          ? Colors.blue
-                                          : Colors.red;
-                              final label = isFree
-                                  ? 'Своб.'
-                                  : isReserved
-                                      ? 'Бронь'
-                                      : 'Занято';
-                              // Незаконно занято: место красное, у меня есть пропуск на него,
-                              // но гость ещё не приехал — значит кто-то посторонний.
-                              final isUnlawfullyOccupied = !isFree &&
-                                  !isReserved &&
-                                  _pendingPassSpotIds.contains(spot.id);
-                              // Мой гость законно приехал — никаких диалогов «Сообщить».
-                              final isMyGuestArrived = !isFree &&
-                                  !isReserved &&
-                                  _arrivedPassSpotIds.contains(spot.id);
+                                          ? 'Бронь'
+                                          : 'Гость';
                               return GestureDetector(
                                 onTap: _loading
                                     ? null
-                                    : isUnlawfullyOccupied
+                                    : isAlert
                                         ? () => _reportGuestSpotToAdmin(spot)
                                         : isMyGuestArrived
                                             ? () => _snack(
                                                 'Место ${spot.spotNumber} занято вашим гостем (на территории).')
-                                            : !isFree
+                                            : isReserved
                                                 ? () => _snack(
-                                                    isReserved
-                                                        ? 'Место ${spot.spotNumber} забронировано. Выберите другое место.'
-                                                        : 'Место ${spot.spotNumber} занято. Выберите другое место.')
+                                                    'Место ${spot.spotNumber} забронировано. Выберите другое место.')
                                                 : () => setState(() =>
                                                     _selectedGuestSpotId =
                                                         isSelected ? null : spot.id),

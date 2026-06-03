@@ -96,7 +96,7 @@ class _ResidentParkingPageState extends State<_ResidentParkingPage> {
   Future<void> _reportToSecurity(ParkingSpot spot) async {
     try {
       await ApiClient.instance.post('/service-requests', data: {
-        'category': 'Парковка',
+        'category': 'Паркинг',
         'description': 'Моё постоянное место ${spot.spotNumber} занято посторонним ТС.',
       });
       if (!mounted) return;
@@ -428,8 +428,13 @@ class _PermanentSpotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isAlert = spot.status == ParkingSpotStatus.occupied;
+    final isAlert = spot.alert;
+    final isOccupied = spot.status == ParkingSpotStatus.occupied;
     final color = isAlert ? Colors.red : Colors.green;
+    // Текст статуса: тревоги нет, но место занято → значит занял сам владелец.
+    final statusText = (isOccupied && !isAlert)
+        ? 'Занято (вашим ТС)'
+        : spot.status.label;
 
     return Card(
       color: color.withValues(alpha: 0.08),
@@ -462,7 +467,7 @@ class _PermanentSpotCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              spot.status.label,
+              statusText,
               style: TextStyle(color: color, fontWeight: FontWeight.w600),
             ),
             if (isAlert) ...[

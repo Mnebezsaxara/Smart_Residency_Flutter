@@ -11,6 +11,12 @@ class ParkingSpot {
   final String? assignedUserName;
   final String? currentBookingId;
 
+  /// Реальная тревога: место занято посторонним ТС (сервер подтвердил —
+  /// владелец/ожидаемый гость не въезжал). Только при `true` показываем
+  /// красную карточку и кнопку «Сообщить». Никогда не выводим тревогу из
+  /// `status == occupied`. Дефолт `false`, если бэк ещё не отдаёт поле.
+  final bool alert;
+
   const ParkingSpot({
     required this.id,
     required this.spotNumber,
@@ -19,6 +25,7 @@ class ParkingSpot {
     this.assignedUserId,
     this.assignedUserName,
     this.currentBookingId,
+    this.alert = false,
   });
 
   factory ParkingSpot.fromJson(Map<String, dynamic> json) => ParkingSpot(
@@ -29,6 +36,7 @@ class ParkingSpot {
         assignedUserId: json['assigned_user_id']?.toString(),
         assignedUserName: json['assigned_user_name']?.toString(),
         currentBookingId: json['current_booking_id']?.toString(),
+        alert: json['alert'] == true,
       );
 
   static ParkingSpotType _parseType(String? v) {
