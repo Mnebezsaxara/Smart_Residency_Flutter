@@ -400,8 +400,11 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
     final staffList = widget.staffList ?? [];
     final hasMultipleStaff = staffList.length > 1;
 
+    // Резолвим выбранного сотрудника всегда, когда список непустой — в том числе
+    // когда сотрудник ОДИН (тогда чипов нет, но карточка обязана читать его
+    // phone/work_schedule из той же модели, что и в ветке с несколькими).
     StaffMember? selectedStaff;
-    if (hasMultipleStaff && _selectedStaffId != null) {
+    if (staffList.isNotEmpty) {
       selectedStaff = staffList.firstWhere(
         (staff) => staff.id == _selectedStaffId,
         orElse: () => staffList.first,
@@ -469,9 +472,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  hasMultipleStaff && selectedStaff != null
-                                      ? selectedStaff.fullName
-                                      : s.staffName,
+                                  selectedStaff?.fullName ?? s.staffName,
                                   style: Theme.of(context)
                                       .textTheme
                                       .titleMedium,
